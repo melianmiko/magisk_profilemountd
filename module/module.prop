@@ -1,0 +1,6 @@
+id=profilemountd
+name=ProfileMount Daemon
+version=1.0
+versionCode=1
+author=melianmiko
+description=Mounts owner's internal storage into other users
