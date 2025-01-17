@@ -9,9 +9,11 @@
 #define ROOT_PATH "/data/media"
 #define SOURCE_PATH "/data/media/0"
 #define TARGET_DIR_NAME "PrimaryFS"
+#define LOG_FILE "/data/adb/modules/profilemountd/service.log"
 #define SLEEP_DELAY 5
 
 int mountState[128];
+FILE* logFile;
 
 void joinPath(char* dst, char* child) {
     strcat(dst, "/");
@@ -28,8 +30,8 @@ int loop() {
 
     baseDir = opendir(ROOT_PATH);
     if(baseDir == 0) {
-        printf("Can't open root directory, looks like it's bug.\n");
-        return 1;
+        fprintf(logFile, "[!!] Root directory seems to be not ready, delay...\n");
+        return 0;
     }
 
     while((dp = readdir(baseDir)) != 0) {
@@ -48,23 +50,22 @@ int loop() {
         ret = stat(path, &statBuf) == 0 && S_ISDIR(statBuf.st_mode);
 
         if(ret && !mountState[uid]) {
-            printf("[==] Mounting %s over %s... ", SOURCE_PATH, path);
+            fprintf(logFile, "[==] Mounting %s over %s... ", SOURCE_PATH, path);
             if((ret = mount(SOURCE_PATH, path, 0, MS_BIND, 0)) == 0) {
-                printf("success\n");
+                fprintf(logFile, "success\n");
                 mountState[uid] = 1;
             } else {
-                printf("failed with %d\n", ret);
+                fprintf(logFile, "failed with %d\n", ret);
                 mountState[uid] = 0;
             }
         } else if(!ret && mountState[uid]) {
-            printf("[==] Umounting %s... ", path);
+            fprintf(logFile, "[==] Umounting %s... ", path);
             if((ret = umount(path)) == 0) {
-                printf("success\n");
-                mountState[uid] = 1;
+                fprintf(logFile, "success\n");
             } else {
-                printf("failed with %d\n", ret);
-                mountState[uid] = 0;
+                fprintf(logFile, "failed with %d\n", ret);
             }
+            mountState[uid] = 0;
         }
     }
 
@@ -74,14 +75,24 @@ int loop() {
 
 int main() {
     int ret = 0;
+
+    logFile = fopen(LOG_FILE, "w");
+
+    fprintf(logFile, "[--] Service started\n");
+
     while(1) {
         if((ret = loop()) != 0) {
+            fprintf(logFile, "[!!] Exiting with error code %d\n", ret);
             return ret;
         }
 
+        fflush(logFile);
         sleep(SLEEP_DELAY);
     }
 
-    printf("[!!] Loop exited, which is impossible\n");
+    fprintf(logFile, "[!!] Loop exited, which is impossible\n");
+
+    (void)fclose(logFile);
+
     return 99;
 }
